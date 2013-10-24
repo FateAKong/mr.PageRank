@@ -14,6 +14,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Random;
 
 /**
@@ -25,7 +26,12 @@ import java.util.Random;
 public class RankCalculator {
 
     private static final double DAMPING_FACTOR = 0.85;
-    private Job job;
+    private Job job = null;
+    private HashMap<String, Double> ranks = null;
+
+    public HashMap<String, Double> getRanks() {
+        return ranks;
+    }
 
     public Configuration getConfig() {
         return job.getConfiguration();
@@ -53,9 +59,11 @@ public class RankCalculator {
 
         FileInputFormat.addInputPath(job, new Path(inputPath));
         FileOutputFormat.setOutputPath(job, new Path(outputPath));
+
+        ranks = new HashMap<String, Double>();
     }
 
-    private static class Map extends Mapper<Text, PageWritable, Text, RankOrOutlinksWritable> {
+    private class Map extends Mapper<Text, PageWritable, Text, RankOrOutlinksWritable> {
         // TODO multiple outlinks with url towards the same page count as one
         // TODO don't count loops (page linking to itself)
         @Override
@@ -71,7 +79,12 @@ public class RankCalculator {
         }
     }
 
-    private static class Reduce extends Reducer<Text, RankOrOutlinksWritable, Text, PageWritable> {
+    private class Reduce extends Reducer<Text, RankOrOutlinksWritable, Text, PageWritable> {
+//        @Override
+//        protected void setup(Context context) throws IOException, InterruptedException {
+//            ranks.clear();
+//        }
+
         @Override
         protected void reduce(Text key, Iterable<RankOrOutlinksWritable> values, Context context) throws IOException, InterruptedException {
             double rank = 0;
@@ -85,11 +98,12 @@ public class RankCalculator {
             }
             rank = 1 - DAMPING_FACTOR + (DAMPING_FACTOR * rank);
             context.write(key, new PageWritable(rank, outlinks));
+            ranks.put(key.toString(), rank);
         }
     }
 
     // TODO fix
-    private static class Combine extends Reducer<Text, RankOrOutlinksWritable, Text, RankOrOutlinksWritable> {
+    private class Combine extends Reducer<Text, RankOrOutlinksWritable, Text, RankOrOutlinksWritable> {
         @Override
         protected void reduce(Text key, Iterable<RankOrOutlinksWritable> values, Context context) throws IOException, InterruptedException {
             double rank = 0;
@@ -104,7 +118,7 @@ public class RankCalculator {
         }
     }
 
-    private static class RankOrOutlinksWritable implements Writable {    // used as value class of Mapper output and Reducer input
+    private class RankOrOutlinksWritable implements Writable {    // used as value class of Mapper output and Reducer input
         private boolean isRankOrOutlinks;
 
         private double rank; // calculated pagerank value from a particular inlink

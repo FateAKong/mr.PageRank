@@ -22,7 +22,7 @@ import java.util.HashSet;
  */
 public class FileParser {
 
-    private Job job;
+    private Job job = null;
 
     public Configuration getConfig() {
         return job.getConfiguration();
@@ -50,7 +50,7 @@ public class FileParser {
         FileOutputFormat.setOutputPath(job, new Path(outputPath));
     }
 
-    private static class Map extends Mapper<LongWritable, Text, Text, Text> {
+    private class Map extends Mapper<LongWritable, Text, Text, Text> {
         @Override
         protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
             String[] pieces = value.toString().split("\\s");
@@ -62,7 +62,7 @@ public class FileParser {
         }
     }
 
-    private static class Reduce extends Reducer<Text, Text, Text, PageWritable> {
+    private class Reduce extends Reducer<Text, Text, Text, PageWritable> {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
             HashSet<Text> hashOutlinks = new HashSet<Text>();
