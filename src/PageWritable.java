@@ -15,8 +15,12 @@ import java.util.ArrayList;
 
 public class PageWritable implements Writable {   // used as value class of Mapper input and Reducer output
 
-    private double rank;
-    private ArrayList<Text> outlinks;
+    private double rank = 0;
+    private ArrayList<Text> outlinks = null;
+
+    public  PageWritable() {
+        outlinks = new ArrayList<Text>();
+    }
 
     public PageWritable(double rank, ArrayList<Text> outlinks) {
         this.rank = rank;

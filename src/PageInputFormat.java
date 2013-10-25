@@ -42,7 +42,7 @@ public class PageInputFormat extends FileInputFormat<Text, PageWritable> {
             if (lineReader.nextKeyValue()) {
                 Text lineValue = lineReader.getCurrentValue();
                 String[] pieces = lineValue.toString().split("\\s");
-                if (pieces.length > 2) {
+                if (pieces.length >= 2) {
 
                     ArrayList<Text> outlinks = new ArrayList<Text>();
                     for (int i = 2; i<pieces.length; i++) {

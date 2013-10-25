@@ -50,24 +50,33 @@ public class FileParser {
         FileOutputFormat.setOutputPath(job, new Path(outputPath));
     }
 
-    private class Map extends Mapper<LongWritable, Text, Text, Text> {
+    private static class Map extends Mapper<LongWritable, Text, Text, Text> {
         @Override
         protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
             String[] pieces = value.toString().split("\\s");
-            for (int i = 1; i < pieces.length; i++) {   // length > 1
-                if (!pieces[i].equals(pieces[0])) {
-                    context.write(new Text(pieces[0]), new Text(pieces[i]));
+            // it's wrong to eliminate nodes without outlinks which results in incorrect initial probability (1/N)
+            if (pieces.length > 1) {
+                for (int i = 1; i < pieces.length; i++) {
+                    if (!pieces[i].equals(pieces[0])) {
+                        context.write(new Text(pieces[0]), new Text(pieces[i]));
+                    }
                 }
+            } else {
+                context.write(new Text(pieces[0]), new Text());
             }
         }
     }
 
-    private class Reduce extends Reducer<Text, Text, Text, PageWritable> {
+    private static class Reduce extends Reducer<Text, Text, Text, PageWritable> {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
             HashSet<Text> hashOutlinks = new HashSet<Text>();
-            for (Text value: values) {
-                hashOutlinks.add(new Text(value));
+            for (Text value : values) {
+                if (value.getLength()==0) {
+                    context.write(key, new PageWritable(1, new ArrayList<Text>()));
+                } else {
+                    hashOutlinks.add(new Text(value));
+                }
             }
             context.write(key, new PageWritable(1, new ArrayList<Text>(hashOutlinks)));
         }

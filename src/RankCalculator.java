@@ -27,10 +27,10 @@ public class RankCalculator {
 
     private static final double DAMPING_FACTOR = 0.85;
     private Job job = null;
-    private HashMap<String, Double> ranks = null;
+    private static HashMap<String, Boolean> ranks = null;
 
-    public HashMap<String, Double> getRanks() {
-        return ranks;
+    public Boolean isConverged() {
+        return !ranks.containsValue(false);
     }
 
     public Configuration getConfig() {
@@ -60,10 +60,10 @@ public class RankCalculator {
         FileInputFormat.addInputPath(job, new Path(inputPath));
         FileOutputFormat.setOutputPath(job, new Path(outputPath));
 
-        ranks = new HashMap<String, Double>();
+        ranks = new HashMap<String, Boolean>();
     }
 
-    private class Map extends Mapper<Text, PageWritable, Text, RankOrOutlinksWritable> {
+    private static class Map extends Mapper<Text, PageWritable, Text, RankOrOutlinksWritable> {
         // TODO multiple outlinks with url towards the same page count as one
         // TODO don't count loops (page linking to itself)
         @Override
@@ -74,12 +74,12 @@ public class RankCalculator {
             for (Text outlink : outlinks) {
                 context.write(new Text(outlink), new RankOrOutlinksWritable(rank));
             }
-            RankOrOutlinksWritable row = new RankOrOutlinksWritable(outlinks);
-            context.write(key, row);
+//            RankOrOutlinksWritable row = new RankOrOutlinksWritable(outlinks);
+            context.write(key, new RankOrOutlinksWritable(value));
         }
     }
 
-    private class Reduce extends Reducer<Text, RankOrOutlinksWritable, Text, PageWritable> {
+    private static class Reduce extends Reducer<Text, RankOrOutlinksWritable, Text, PageWritable> {
 //        @Override
 //        protected void setup(Context context) throws IOException, InterruptedException {
 //            ranks.clear();
@@ -88,22 +88,32 @@ public class RankCalculator {
         @Override
         protected void reduce(Text key, Iterable<RankOrOutlinksWritable> values, Context context) throws IOException, InterruptedException {
             double rank = 0;
+            double _rank = 0;
             ArrayList<Text> outlinks = null;
             for (RankOrOutlinksWritable value : values) {
                 if (value.isRankOrOutlinks) {
                     rank += value.rank;
                 } else {
-                    outlinks = new ArrayList<Text>(value.outlinks);
+                    outlinks = value.page.getOutlinks();
+                    _rank = value.page.getRank();
                 }
             }
             rank = 1 - DAMPING_FACTOR + (DAMPING_FACTOR * rank);
-            context.write(key, new PageWritable(rank, outlinks));
-            ranks.put(key.toString(), rank);
+            if (rank!=0||outlinks!=null) {
+                context.write(key, new PageWritable(rank, outlinks));
+            } else {
+                throw new NullPointerException("intermediate pairs missing");
+            }
+            if (Math.abs(rank-_rank)>0.0001) {
+                ranks.put(key.toString(), false);
+            } else {
+                ranks.put(key.toString(), true);
+            }
         }
     }
 
     // TODO fix
-    private class Combine extends Reducer<Text, RankOrOutlinksWritable, Text, RankOrOutlinksWritable> {
+    private static class Combine extends Reducer<Text, RankOrOutlinksWritable, Text, RankOrOutlinksWritable> {
         @Override
         protected void reduce(Text key, Iterable<RankOrOutlinksWritable> values, Context context) throws IOException, InterruptedException {
             double rank = 0;
@@ -118,17 +128,20 @@ public class RankCalculator {
         }
     }
 
-    private class RankOrOutlinksWritable implements Writable {    // used as value class of Mapper output and Reducer input
-        private boolean isRankOrOutlinks;
+    // there are no objects in static class thus the single class be reused without constructing new instances
+    private static class RankOrOutlinksWritable implements Writable {    // used as value class of Mapper output and Reducer input
 
-        private double rank; // calculated pagerank value from a particular inlink
         private ArrayList<Text> outlinks = null;
+        private PageWritable page = null;
+
+        private boolean isRankOrOutlinks;
+        private double rank; // calculated pagerank value from a particular inlink
 
         // for reading results from Mapper output into Reducer input
-        // note that the object will be reused without reconstructing thus do initialization in write()
-        private RankOrOutlinksWritable() {
-        }
+        // TODO deletable ?
+        private RankOrOutlinksWritable() {}
 
+        // TODO remove constructor from static class
         private RankOrOutlinksWritable(double rank) {   // for writing results as Mapper output
             this.rank = rank;
             isRankOrOutlinks = true;
@@ -139,40 +152,38 @@ public class RankCalculator {
             isRankOrOutlinks = false;
         }
 
+        private RankOrOutlinksWritable(PageWritable page) {
+            this.page = page;
+            isRankOrOutlinks = false;
+        }
+
         @Override
         public void write(DataOutput dataOutput) throws IOException {
             dataOutput.writeBoolean(isRankOrOutlinks);
             if (isRankOrOutlinks) {
                 dataOutput.writeDouble(rank);
             } else {
-                dataOutput.writeInt(outlinks.size());
-                for (Text outlink: outlinks) {
-                    dataOutput.writeUTF(outlink.toString());
-                }
-            }
-//            String line = Boolean.toString(isRankOrOutlinks);
-//            if (isRankOrOutlinks) {
-//                line += ' ' + Double.toString(rank);
-//            } else {
-//                for (Text outlink : outlinks) {
-//                    line += ' ' + outlink.toString();
+                page.write(dataOutput);
+//                dataOutput.writeInt(outlinks.size());
+//                for (Text outlink: outlinks) {
+//                    dataOutput.writeUTF(outlink.toString());
 //                }
-//            }
-//            line += '\n';
-//            dataOutput.writeUTF(line);
+            }
         }
 
         @Override
         public void readFields(DataInput dataInput) throws IOException {
-            outlinks = new ArrayList<Text>();
+//            outlinks = new ArrayList<Text>();
+            page = new PageWritable();
             isRankOrOutlinks = dataInput.readBoolean();
             if (isRankOrOutlinks) {
                 rank = dataInput.readDouble();
             } else {
-                int nOutlinks = dataInput.readInt();
-                while (nOutlinks-- > 0) {
-                    outlinks.add(new Text(dataInput.readUTF()));
-                }
+//                int nOutlinks = dataInput.readInt();
+//                while (nOutlinks-- > 0) {
+//                    outlinks.add(new Text(dataInput.readUTF()));
+//                }
+                page.readFields(dataInput);
             }
 //            String[] pieces = dataInput.readLine().split("\\s");
 //            isRankOrOutlinks = Boolean.parseBoolean(pieces[0].trim());
