@@ -1,9 +1,6 @@
 import org.apache.hadoop.mapreduce.lib.jobcontrol.ControlledJob;
 import org.apache.hadoop.mapreduce.lib.jobcontrol.JobControl;
 
-import java.util.HashMap;
-import java.util.Map.Entry;
-
 /**
  * Created with IntelliJ IDEA.
  * User: FateAKong
@@ -14,13 +11,13 @@ public class PageRank {
     public static void main(String[] args) throws Exception {
         JobControl ctrl = new JobControl("PageRank");
         JobController ctrller = new JobController(ctrl);
-        FileParser fp = new FileParser(args[0], args[1]+"/0");
+        PageParser fp = new PageParser(args[0], args[1]+"/0");
         ControlledJob fpjob = new ControlledJob(fp.getConfig());
         int iIter = 0;
         boolean isConverged;
         do {
             System.out.println("begin iteration #"+iIter);
-            RankCalculator rc = new RankCalculator(args[1]+"/"+Integer.toString(iIter), args[1]+"/"+Integer.toString(iIter+1));;
+            RankCalculator rc = new RankCalculator(args[1]+"/"+Integer.toString(iIter), args[1]+"/"+Integer.toString(iIter+1));
             ControlledJob rcjob = new ControlledJob(rc.getConfig());
             isConverged = true;
             if (iIter==0) {
@@ -40,8 +37,16 @@ public class PageRank {
             isConverged = rc.isConverged();
             iIter++;
         } while (!isConverged);
-        // iIter-1
-        while (!ctrl.allFinished());
+
+        RankSorter rs = new RankSorter(args[1]+"/"+Integer.toString(iIter), args[2]);
+        ControlledJob rsjob = new ControlledJob(rs.getConfig());
+        ctrl.addJob(rsjob);
+        Thread t = new Thread(ctrller);
+        t.start();
+        while (!ctrl.allFinished()) {
+            System.out.println("sorting");
+            Thread.sleep(5000);
+        }
         System.out.println("num of iterations: "+iIter);
         System.exit(0);
     }

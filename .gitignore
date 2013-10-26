@@ -1,5 +1,6 @@
 out
 output
 temp
+stat
 *.iml
 .idea

@@ -6,16 +6,13 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.KeyValueTextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Random;
 
 /**
  * Created with IntelliJ IDEA.
@@ -27,10 +24,10 @@ public class RankCalculator {
 
     private static final double DAMPING_FACTOR = 0.85;
     private Job job = null;
-    private static HashMap<String, Boolean> ranks = null;
+    private static HashMap<String, Boolean> isRanksConverged = null;
 
     public Boolean isConverged() {
-        return !ranks.containsValue(false);
+        return !isRanksConverged.containsValue(false);
     }
 
     public Configuration getConfig() {
@@ -60,7 +57,7 @@ public class RankCalculator {
         FileInputFormat.addInputPath(job, new Path(inputPath));
         FileOutputFormat.setOutputPath(job, new Path(outputPath));
 
-        ranks = new HashMap<String, Boolean>();
+        isRanksConverged = new HashMap<String, Boolean>();
     }
 
     private static class Map extends Mapper<Text, PageWritable, Text, RankOrOutlinksWritable> {
@@ -83,7 +80,7 @@ public class RankCalculator {
     private static class Reduce extends Reducer<Text, RankOrOutlinksWritable, Text, PageWritable> {
 //        @Override
 //        protected void setup(Context context) throws IOException, InterruptedException {
-//            ranks.clear();
+//            isRanksConverged.clear();
 //        }
 
         @Override
@@ -111,9 +108,9 @@ public class RankCalculator {
                 throw new NullPointerException("intermediate pairs missing");
             }
             if (Math.abs(rank-_rank)>0.01) {
-                ranks.put(key.toString(), false);
+                isRanksConverged.put(key.toString(), false);
             } else {
-                ranks.put(key.toString(), true);
+                isRanksConverged.put(key.toString(), true);
             }
         }
     }
