@@ -70,11 +70,12 @@ public class RankCalculator {
         protected void map(Text key, PageWritable value, Context context) throws IOException, InterruptedException {
             double rank = value.getRank();
             ArrayList<Text> outlinks = value.getOutlinks();
-            rank = rank / outlinks.size();
-            for (Text outlink : outlinks) {
-                context.write(new Text(outlink), new RankOrOutlinksWritable(rank));
+            if (outlinks.size()>0) {
+                rank = rank / outlinks.size();
+                for (Text outlink : outlinks) {
+                    context.write(outlink, new RankOrOutlinksWritable(rank));
+                }
             }
-//            RankOrOutlinksWritable row = new RankOrOutlinksWritable(outlinks);
             context.write(key, new RankOrOutlinksWritable(value));
         }
     }
@@ -96,6 +97,11 @@ public class RankCalculator {
                 } else {
                     outlinks = value.page.getOutlinks();
                     _rank = value.page.getRank();
+
+                    // recover missing PageRank mass for pages (nodes) without outlinks
+                    if (outlinks.size()==0) {
+                        rank += _rank;
+                    }
                 }
             }
             rank = 1 - DAMPING_FACTOR + (DAMPING_FACTOR * rank);
@@ -104,7 +110,7 @@ public class RankCalculator {
             } else {
                 throw new NullPointerException("intermediate pairs missing");
             }
-            if (Math.abs(rank-_rank)>0.0001) {
+            if (Math.abs(rank-_rank)>0.01) {
                 ranks.put(key.toString(), false);
             } else {
                 ranks.put(key.toString(), true);
@@ -112,47 +118,39 @@ public class RankCalculator {
         }
     }
 
-    // TODO fix
-    private static class Combine extends Reducer<Text, RankOrOutlinksWritable, Text, RankOrOutlinksWritable> {
-        @Override
-        protected void reduce(Text key, Iterable<RankOrOutlinksWritable> values, Context context) throws IOException, InterruptedException {
-            double rank = 0;
-            for (RankOrOutlinksWritable value : values) {
-                if (value.isRankOrOutlinks) {
-                    rank += value.rank;
-                } else {
-                    context.write(key, new RankOrOutlinksWritable(value.outlinks));
-                }
-            }
-            context.write(key, new RankOrOutlinksWritable(rank));
-        }
-    }
+//    // TODO fix
+//    private static class Combine extends Reducer<Text, RankOrOutlinksWritable, Text, RankOrOutlinksWritable> {
+//        @Override
+//        protected void reduce(Text key, Iterable<RankOrOutlinksWritable> values, Context context) throws IOException, InterruptedException {
+//            double rank = 0;
+//            for (RankOrOutlinksWritable value : values) {
+//                if (value.isRankOrOutlinks) {
+//                    rank += value.rank;
+//                } else {
+//                    context.write(key, new RankOrOutlinksWritable(value.outlinks));
+//                }
+//            }
+//            context.write(key, new RankOrOutlinksWritable(rank));
+//        }
+//    }
 
     // there are no objects in static class thus the single class be reused without constructing new instances
     private static class RankOrOutlinksWritable implements Writable {    // used as value class of Mapper output and Reducer input
 
-        private ArrayList<Text> outlinks = null;
         private PageWritable page = null;
 
         private boolean isRankOrOutlinks;
         private double rank; // calculated pagerank value from a particular inlink
 
-        // for reading results from Mapper output into Reducer input
-        // TODO deletable ?
-        private RankOrOutlinksWritable() {}
+        public RankOrOutlinksWritable() {}
 
         // TODO remove constructor from static class
-        private RankOrOutlinksWritable(double rank) {   // for writing results as Mapper output
+        public RankOrOutlinksWritable(double rank) {   // for writing results as Mapper output
             this.rank = rank;
             isRankOrOutlinks = true;
         }
 
-        private RankOrOutlinksWritable(ArrayList<Text> outlinks) {  // for writing results as Mapper output
-            this.outlinks = outlinks;
-            isRankOrOutlinks = false;
-        }
-
-        private RankOrOutlinksWritable(PageWritable page) {
+        public RankOrOutlinksWritable(PageWritable page) {
             this.page = page;
             isRankOrOutlinks = false;
         }
@@ -164,34 +162,29 @@ public class RankCalculator {
                 dataOutput.writeDouble(rank);
             } else {
                 page.write(dataOutput);
-//                dataOutput.writeInt(outlinks.size());
-//                for (Text outlink: outlinks) {
-//                    dataOutput.writeUTF(outlink.toString());
-//                }
             }
         }
 
         @Override
         public void readFields(DataInput dataInput) throws IOException {
-//            outlinks = new ArrayList<Text>();
-            page = new PageWritable();
             isRankOrOutlinks = dataInput.readBoolean();
             if (isRankOrOutlinks) {
                 rank = dataInput.readDouble();
+                page = null;
             } else {
-//                int nOutlinks = dataInput.readInt();
-//                while (nOutlinks-- > 0) {
-//                    outlinks.add(new Text(dataInput.readUTF()));
-//                }
+                rank = 0;
+                page = new PageWritable();
                 page.readFields(dataInput);
             }
-//            String[] pieces = dataInput.readLine().split("\\s");
-//            isRankOrOutlinks = Boolean.parseBoolean(pieces[0].trim());
-//            if (isRankOrOutlinks) {
-//                rank = Double.parseDouble(pieces[1].trim());
-//            } else {
-//                for (int i = 1; i < pieces.length; i++) outlinks.add(new Text(pieces[i].trim()));
-//            }
+        }
+
+        @Override
+        public String toString() {
+            return "RankOrOutlinksWritable{" +
+                    "isRankOrOutlinks=" + isRankOrOutlinks +
+                    ", rank=" + rank +
+                    ", page=" + page +
+                    '}';
         }
     }
 }

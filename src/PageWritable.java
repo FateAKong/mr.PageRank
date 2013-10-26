@@ -27,18 +27,20 @@ public class PageWritable implements Writable {   // used as value class of Mapp
         this.outlinks = outlinks;
     }
 
-//    public String toString() {
-//        String ret = double.toString(rank) + ',';
-//        return ret;
-//    }
+    @Override
+    public String toString() {
+        return "PageWritable{" +
+                "rank=" + rank +
+                ", outlinks=" + outlinks +
+                '}';
+    }
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
         dataOutput.writeDouble(rank);
         dataOutput.writeInt(outlinks.size());
         for(Text outlink: outlinks) {
-//            System.out.println(outlink);
-            dataOutput.writeUTF(outlink.toString());
+            outlink.write(dataOutput);
         }
     }
 
@@ -47,8 +49,11 @@ public class PageWritable implements Writable {   // used as value class of Mapp
         rank = dataInput.readDouble();
         int nOutlinks = dataInput.readInt();
         while (nOutlinks-->0) {
-            outlinks.add(new Text(dataInput.readUTF()));
+            Text outlink = new Text();
+            outlink.readFields(dataInput);
+            outlinks.add(outlink);
         }
+//        System.out.println("PWr#"+this);
     }
 
     public double getRank() {

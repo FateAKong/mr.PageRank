@@ -19,10 +19,11 @@ public class PageRank {
         int iIter = 0;
         boolean isConverged;
         do {
+            System.out.println("begin iteration #"+iIter);
             RankCalculator rc = new RankCalculator(args[1]+"/"+Integer.toString(iIter), args[1]+"/"+Integer.toString(iIter+1));;
             ControlledJob rcjob = new ControlledJob(rc.getConfig());
             isConverged = true;
-            if (iIter++==0) {
+            if (iIter==0) {
                 rcjob.addDependingJob(fpjob);
                 ctrl.addJob(rcjob);
                 ctrl.addJob(fpjob);
@@ -32,10 +33,12 @@ public class PageRank {
             Thread t = new Thread(ctrller);
             t.start();
             while (!ctrl.allFinished()) {
-                System.out.println("still running iteration #"+iIter);
+                System.out.println("running iteration #"+iIter);
                 Thread.sleep(5000);
             }
+            System.out.println("end iteration #"+iIter);
             isConverged = rc.isConverged();
+            iIter++;
         } while (!isConverged);
         // iIter-1
         while (!ctrl.allFinished());

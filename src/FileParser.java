@@ -71,14 +71,19 @@ public class FileParser {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
             HashSet<Text> hashOutlinks = new HashSet<Text>();
+            boolean isSink = false;
             for (Text value : values) {
                 if (value.getLength()==0) {
-                    context.write(key, new PageWritable(1, new ArrayList<Text>()));
+                    isSink = true;
                 } else {
                     hashOutlinks.add(new Text(value));
                 }
             }
-            context.write(key, new PageWritable(1, new ArrayList<Text>(hashOutlinks)));
+            if (isSink) {
+                context.write(key, new PageWritable(1, new ArrayList<Text>()));
+            } else {
+                context.write(key, new PageWritable(1, new ArrayList<Text>(hashOutlinks)));
+            }
         }
     }
 

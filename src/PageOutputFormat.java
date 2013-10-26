@@ -38,7 +38,10 @@ public class PageOutputFormat extends FileOutputFormat<Text, PageWritable> {
         @Override
         public void write(Text text, PageWritable pageWritable) throws IOException, InterruptedException {
             if (text == null || pageWritable == null) return;
-            String line = text.toString() + ' ' + Double.toString(pageWritable.getRank());
+            // add a leading dummy symbol to work around with utf-8 encoding problems
+            // so that leading invalid chars before the page (node) id/url could be avoided
+            // transforming from text.toString() rather that text.write(dos) might result in problems
+            String line = "###\t" + text.toString() + ' ' + Double.toString(pageWritable.getRank());
             ArrayList<Text> outlinks = pageWritable.getOutlinks();
             if (outlinks != null) { // sinks have no outlinks but only rank value
                 for (Text outlink : outlinks) {
