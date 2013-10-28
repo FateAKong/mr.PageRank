@@ -70,7 +70,7 @@ public class PageParser {
 
     private static class Reduce extends Reducer<Text, Text, Text, PageWritable> {
 
-        private int nPages = 0, nTotalOutlinks = 0, nMinOutlinks = -1, nMaxOutlinks = -1;
+        private int nPages= 0, totalOutlinks = 0, minOutlink = -1, maxOutlink = -1;
 
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
@@ -93,12 +93,12 @@ public class PageParser {
                 context.write(key, new PageWritable(1, outlinks));
             }
             int nOutlinks = outlinks.size();
-            nTotalOutlinks += nOutlinks;
-            if (nMinOutlinks==-1&& nMaxOutlinks ==-1) {
-                nMinOutlinks = nMaxOutlinks = nOutlinks;
+            totalOutlinks += nOutlinks;
+            if (minOutlink ==-1&& maxOutlink ==-1) {
+                minOutlink = maxOutlink = nOutlinks;
             } else {
-                if (nOutlinks<nMinOutlinks) nMinOutlinks = nOutlinks;
-                if (nOutlinks>nMaxOutlinks) nMaxOutlinks = nOutlinks;
+                if (nOutlinks< minOutlink) minOutlink = nOutlinks;
+                if (nOutlinks> maxOutlink) maxOutlink = nOutlinks;
             }
         }
 
@@ -109,11 +109,11 @@ public class PageParser {
             FileSystem fs = FileSystem.get(context.getConfiguration());
             FSDataOutputStream dos = fs.create(file, context);
             stats += "number of nodes == " + nPages + "\n";
-            stats += "number of edges == " + nTotalOutlinks + "\n";
+            stats += "number of edges == " + totalOutlinks + "\n";
             stats += "out-degree of each node" + "\n";
-            stats += "\tmin == " + nMinOutlinks +"\n";
-            stats += "\tmax == " + nMaxOutlinks + "\n";
-            stats += "\tavg == " + String.format("%.2f", ((float)nTotalOutlinks)/nPages) + "\n";
+            stats += "\tmin == " + minOutlink +"\n";
+            stats += "\tmax == " + maxOutlink + "\n";
+            stats += "\tavg == " + String.format("%.2f", ((float) totalOutlinks)/nPages) + "\n";
             dos.write(stats.getBytes());
             dos.close();
         }

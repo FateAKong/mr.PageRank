@@ -25,6 +25,7 @@ public class RankCalculator {
     private static final double DAMPING_FACTOR = 0.85;
     private Job job = null;
     private static HashMap<String, Boolean> isRanksConverged = null;
+    private static double avgMissingMass = 0;
 
     public Boolean isConverged() {
         return !isRanksConverged.containsValue(false);
@@ -61,8 +62,8 @@ public class RankCalculator {
     }
 
     private static class Map extends Mapper<Text, PageWritable, Text, RankOrOutlinksWritable> {
-        // TODO multiple outlinks with url towards the same page count as one
-        // TODO don't count loops (page linking to itself)
+        private int nPages = 0;
+        private double totalMissingMass = 0;
         @Override
         protected void map(Text key, PageWritable value, Context context) throws IOException, InterruptedException {
             double rank = value.getRank();
@@ -72,20 +73,26 @@ public class RankCalculator {
                 for (Text outlink : outlinks) {
                     context.write(outlink, new RankOrOutlinksWritable(rank));
                 }
+            } else {
+                totalMissingMass += rank;
             }
+            nPages++;
             context.write(key, new RankOrOutlinksWritable(value));
+        }
+
+        @Override
+        protected void cleanup(Context context) throws IOException, InterruptedException {
+            avgMissingMass = totalMissingMass/nPages;
         }
     }
 
     private static class Reduce extends Reducer<Text, RankOrOutlinksWritable, Text, PageWritable> {
-//        @Override
-//        protected void setup(Context context) throws IOException, InterruptedException {
-//            isRanksConverged.clear();
-//        }
+
+        private double totalRanks = 0;
 
         @Override
         protected void reduce(Text key, Iterable<RankOrOutlinksWritable> values, Context context) throws IOException, InterruptedException {
-            double rank = 0;
+            double rank = avgMissingMass;   // recover missing PageRank mass for pages (nodes) without outlinks
             double _rank = 0;
             ArrayList<Text> outlinks = null;
             for (RankOrOutlinksWritable value : values) {
@@ -94,11 +101,6 @@ public class RankCalculator {
                 } else {
                     outlinks = value.page.getOutlinks();
                     _rank = value.page.getRank();
-
-                    // recover missing PageRank mass for pages (nodes) without outlinks
-                    if (outlinks.size()==0) {
-                        rank += _rank;
-                    }
                 }
             }
             rank = 1 - DAMPING_FACTOR + (DAMPING_FACTOR * rank);
@@ -112,6 +114,12 @@ public class RankCalculator {
             } else {
                 isRanksConverged.put(key.toString(), true);
             }
+            totalRanks += rank;
+        }
+
+        @Override
+        protected void cleanup(Context context) throws IOException, InterruptedException {
+            System.out.println("verify total ranks: " + totalRanks);
         }
     }
 

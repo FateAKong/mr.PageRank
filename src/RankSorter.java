@@ -1,5 +1,6 @@
-import javafx.util.Pair;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.Text;
@@ -11,7 +12,7 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
 import java.io.IOException;
-import java.util.PriorityQueue;
+import java.util.LinkedList;
 
 /**
  * Created with IntelliJ IDEA.
@@ -22,7 +23,7 @@ import java.util.PriorityQueue;
 public class RankSorter {
     private Job job = null;
 
-    private static int nTotalOutlinks = 0;
+    private static int nPages = 0;
 
     public Configuration getConfig() {
         return job.getConfiguration();
@@ -53,22 +54,40 @@ public class RankSorter {
     private static class Map extends Mapper<Text, PageWritable, DoubleWritable, Text> {
         @Override
         protected void map(Text key, PageWritable value, Context context) throws IOException, InterruptedException {
-            nTotalOutlinks ++;
+            nPages++;
             context.write(new DoubleWritable(value.getRank()), key) ;
         }
     }
     private static class Reduce extends Reducer<DoubleWritable, Text, Text, Text> {
+        // TODO use customized Comparator instead of this
+        private LinkedList<String> tops = new LinkedList<String>();
         @Override
         protected void reduce(DoubleWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            String rank = String.format("%.6f", 100*key.get()/ nPages)+'%';
             String pages = null;
             for (Text value: values) {
                 if (pages==null) {
                     pages = value.toString();
                 } else {
-                    pages += ',' + value.toString();
+                    pages += ", " + value.toString();
                 }
             }
-            context.write(new Text(String.format("%.2f", 100*key.get()/nTotalOutlinks)+'%'), new Text(pages));
+            context.write(new Text(rank), new Text(pages));
+            tops.addFirst(rank + "\t" + pages);
+            if (tops.size()>10) tops.removeLast();
+        }
+
+        @Override
+        protected void cleanup(Context context) throws IOException, InterruptedException {
+            String stats = "";
+            Path file = new Path("stat/top10.txt");
+            FileSystem fs = FileSystem.get(context.getConfiguration());
+            FSDataOutputStream dos = fs.create(file, context);
+            for (int i = 0; i<10; i++) {
+                stats += Integer.toString(i+1) + '\t' + tops.get(i) + '\n';
+            }
+            dos.write(stats.getBytes());
+            dos.close();
         }
     }
 }
